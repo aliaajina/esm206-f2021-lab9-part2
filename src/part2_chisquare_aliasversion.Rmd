@@ -1,0 +1,114 @@
+---
+title: "part2_chisquare_aliasversion"
+author: "Alia Ajina"
+date: "11/26/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(here)
+library(janitor)
+library(broom)
+```
+
+## Read in data
+
+```{r}
+lizards <- read_csv(here("data", "lizards.csv"))
+```
+
+## Get counts of lizards by species:
+
+```{r}
+lizards %>% 
+  count(spp) %>% 
+  arrange(-n)
+```
+
+## Make a subset
+
+- UTST lizards
+- Sites: IBPE (enclosure grassland), RABB (rabbit mesquite site), "EAST" (easy tarbush site)
+- Tail condition is recorded (W = whole, B = broken)
+
+```{r}
+utst <- lizards %>% 
+  filter(spp == "UTST") %>% 
+  filter(site %in% c("IBPE", "RABB", "EAST")) %>% 
+  filter(tail %in% c("B","W"))
+```
+
+## Find counts and proportions of lizards with broken and whole tails at each site
+
+```{r}
+utst %>% 
+  count(site, tail) # this is in long format
+```
+
+```{r}
+tail_counts <- utst %>% 
+  janitor::tabyl(site,tail) # puts it in close to contingency table format, much better for audiences
+
+tail_proportions <- tail_counts %>%
+  adorn_percentages() %>% # can also specify that it's in the janitor package "janitor::adorn_percentages()"
+  janitor::adorn_pct_formatting(digits = 2) %>% 
+  janitor::adorn_ns() # this puts actual counts next to the percentages
+
+# chi square would help us look at this from significance test perspective
+```
+
+## Convert to a contingency table
+
+Use `column_to_rowname()` to do so
+
+```{r}
+lizard_ct <- tail_counts %>% 
+  column_to_rownames(var = "site") # moves data names within column to the row 
+```
+
+## Chi-square
+Asking- are tail breakage and site independent?
+If they were truly independent then we would expect similar proportions of lizards with broken or whole tails across the three different sites
+
+Want to know if the proportions at each site are so different that we think we have enough evidence to reject the null hypothesis of independence which would allow us to then conclude that yes there is a significant association or significant effect of site on tail breakage
+
+Challenging because you can ask the same question a lot of different ways
+
+```{r}
+lizard_x2 <- chisq.test(lizard_ct)
+
+lizard_x2 # call the data forward
+
+# use broom::tidy function to get a tidy dataframe that I can easily call those data model components from
+
+lizard_tidy <- broom::tidy(lizard_x2)
+```
+
+# degrees of freedom for chi squared are the (number of rows - 1) * (the number of columns - 1) which is 2*1 = 2
+
+so my chi-squared and degrees of freedom results in a p-value for this test of 0.0014
+
+is that probability that I would get counts that are at least this different from the null hypothesis scenario if they were actually from different categorical variables, is that so low to have gotten that by chance, that I can reject the null hypothesis of independence?
+
+the conclusion, using a significance level of 0.05, is that yes, we have significant evidence to reject the null hypothesis of independence and thereby retain the alternative hypothesis that site and tail breakage are not independent. 
+
+or you could say...
+
+There is a significant association between site and lizard tail breakage
+
+OR
+
+There is a significant effect of site on tail breakage
+
+OR
+
+Site and lizard tail breakage are not independent
+
+Final statement:
+
+There is a significant association (i.e. non-independence) between site and lizard tail breakage ($\chi$^2^(`r lizard_tidy$parameter`) = `r lizard_tidy$statistic`, *p* = `r lizard_tidy$p.value`).
+
+
+
